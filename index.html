@@ -935,75 +935,44 @@ if (!window.RLT_TOOL_INITIALIZED) {
         });
 
         if (scenarioComparisonChart) scenarioComparisonChart.destroy();
+        const savingsLabel = savings.totalCost >= 0 ? 'Einsparung' : 'Mehrkosten';
+        const savingsValue = Math.abs(savings.totalCost);
+        const savingsBgColor = savings.totalCost >= 0 ? '#a7f3d0' : '#fca5a5';
+        const savingsBorderColor = savings.totalCost >= 0 ? '#6ee7b7' : '#ef4444';
+        const savingsDataLabelColor = savings.totalCost >= 0 ? '#065f46' : '#991b1b';
+
         scenarioComparisonChart = new Chart(document.getElementById('scenario-comparison-chart').getContext('2d'), {
             type: 'bar',
             data: {
-                labels: ['Optimierungs-Szenario', 'Basis-Szenario'],
-                datasets: [
-                    {
-                        label: 'Kosten Optimierung',
-                        data: [optimierung.totalCost, 0],
-                        backgroundColor: '#16a34a',
-                        borderColor: '#15803d',
-                        borderWidth: 1,
-                        stack: 'A',
-                    },
-                    {
-                        label: 'Einsparung',
-                        data: [savings.totalCost > 0 ? savings.totalCost : 0, 0],
-                        backgroundColor: '#a7f3d0',
-                        borderColor: '#6ee7b7',
-                        borderWidth: 1,
-                        stack: 'A',
-                    },
-                    {
-                        label: 'Mehrkosten',
-                        data: [savings.totalCost < 0 ? -savings.totalCost : 0, 0],
-                        backgroundColor: '#fca5a5',
-                        borderColor: '#ef4444',
-                        borderWidth: 1,
-                        stack: 'A',
-                    },
-                    {
-                        label: 'Kosten Basis',
-                        data: [0, basis.totalCost],
-                        backgroundColor: '#6b7280',
-                        borderColor: '#4b5563',
-                        borderWidth: 1,
-                        stack: 'B',
-                    }
-                ]
+                labels: ['Basis-Szenario', 'Optimierungs-Szenario', savingsLabel],
+                datasets: [{
+                    label: 'Jahreskosten in €',
+                    data: [basis.totalCost, optimierung.totalCost, savingsValue],
+                    backgroundColor: ['#6b7280', '#16a34a', savingsBgColor],
+                    borderColor: ['#4b5563', '#15803d', savingsBorderColor],
+                    borderWidth: 1,
+                    borderRadius: 4
+                }]
             },
             options: {
                 indexAxis: 'y',
                 responsive: true, maintainAspectRatio: false,
-                plugins: { 
+                plugins: {
                     legend: { display: false },
                     datalabels: {
-                        color: '#ffffff',
-                        font: { weight: 'bold' },
-                        formatter: (value, context) => {
-                             if (value === 0) return '';
-                             // Show total for basis scenario
-                             if (context.dataset.label === 'Kosten Basis') {
-                                 return formatNumber(value, 2) + ' €';
-                             }
-                             // Show total for optimization scenario
-                             if (context.dataset.label === 'Kosten Optimierung') {
-                                 return formatNumber(value, 2) + ' €';
-                             }
-                             return ''; // Hide labels for savings/extra costs to avoid clutter
-                        }
+                        anchor: 'center',
+                        align: 'center',
+                        color: (context) => {
+                            return context.dataIndex === 2 ? savingsDataLabelColor : '#ffffff';
+                        },
+                        font: { size: 14, weight: 'bold' },
+                        formatter: value => value > 0.01 ? `${formatNumber(value, 2)} €` : ''
                     }
                 },
-                scales: { 
-                    x: { 
-                        stacked: true,
-                        beginAtZero: true, 
-                        ticks: { callback: value => `${formatNumber(value)} €` } 
-                    },
-                    y: {
-                        stacked: true
+                scales: {
+                    x: {
+                        beginAtZero: true,
+                        ticks: { callback: value => `${formatNumber(value)} €` }
                     }
                 }
             }
