@@ -205,8 +205,12 @@
                     <label class="block text-md font-medium text-gray-700 mb-2">Anlagenmodus</label>
                     <div id="anlagenmodus" class="flex flex-wrap gap-4 radio-group">
                         <div>
+                            <input type="radio" id="mode-heating-only" name="anlagenmodus" value="heating_only">
+                            <label for="mode-heating-only">Nur Heizen</label>
+                        </div>
+                        <div>
                             <input type="radio" id="mode-temp" name="anlagenmodus" value="temp" checked>
-                            <label for="mode-temp">Nur Temperaturführung</label>
+                            <label for="mode-temp">Temperaturführung (Heizen/Kühlen)</label>
                         </div>
                         <div>
                             <input type="radio" id="mode-dehumidify" name="anlagenmodus" value="dehumidify">
@@ -218,7 +222,8 @@
                         </div>
                     </div>
                     <div class="mt-2 p-3 bg-gray-50 rounded-lg text-xs text-gray-600 space-y-1">
-                        <p><b>Nur Temperaturführung:</b> Anlage heizt oder kühlt sensibel, um die Zulufttemperatur zu erreichen (keine aktive Be-/Entfeuchtung).</p>
+                        <p><b>Nur Heizen:</b> Anlage heizt bei Bedarf, um die Zulufttemperatur zu erreichen. Es findet keine aktive Kühlung statt.</p>
+                        <p><b>Temperaturführung:</b> Anlage heizt oder kühlt sensibel, um die Zulufttemperatur zu erreichen (keine aktive Be-/Entfeuchtung).</p>
                         <p><b>Kühlen & Entfeuchten:</b> Anlage kühlt und entfeuchtet aktiv, um den Zuluft-Sollzustand (Temperatur & Feuchte) zu erreichen.</p>
                         <p><b>Heizen & Befeuchten:</b> Anlage heizt und befeuchtet aktiv, um den Zuluft-Sollzustand (Temperatur & Feuchte) zu erreichen.</p>
                     </div>
@@ -841,10 +846,15 @@ if (!window.RLT_TOOL_INITIALIZED) {
         const massenstromHeiz = (volumenstrom * psychroLib.getDensity(aussenHeiz.temp, aussenHeiz.absHum_g_kg)) / 3600;
         const powerHeat = zuluft.enthalpy > hNachWRG_Heiz ? massenstromHeiz * (zuluft.enthalpy - hNachWRG_Heiz) : 0;
         
-        const tempNachWRG_Kuehl = aussenKuehl.temp - (i.wirkungsgradWRG / 100) * (aussenKuehl.temp - abluft.temp);
-        const hNachWRG_Kuehl = psychroLib.getEnthalpyFromAbsHum(tempNachWRG_Kuehl, aussenKuehl.absHum_g_kg);
-        const massenstromKuehl = (volumenstrom * psychroLib.getDensity(aussenKuehl.temp, aussenKuehl.absHum_g_kg)) / 3600;
-        const powerCool = zuluft.enthalpy < hNachWRG_Kuehl ? massenstromKuehl * (hNachWRG_Kuehl - zuluft.enthalpy) : 0;
+        let powerCool = 0;
+        if (i.anlagenmodus !== 'heating_only') {
+            const tempNachWRG_Kuehl = aussenKuehl.temp - (i.wirkungsgradWRG / 100) * (aussenKuehl.temp - abluft.temp);
+            const hNachWRG_Kuehl = psychroLib.getEnthalpyFromAbsHum(tempNachWRG_Kuehl, aussenKuehl.absHum_g_kg);
+            const massenstromKuehl = (volumenstrom * psychroLib.getDensity(aussenKuehl.temp, aussenKuehl.absHum_g_kg)) / 3600;
+            if (zuluft.enthalpy < hNachWRG_Kuehl) {
+                 powerCool = massenstromKuehl * (hNachWRG_Kuehl - zuluft.enthalpy);
+            }
+        }
 
         return {
             energyFan, costFan,
@@ -937,9 +947,8 @@ if (!window.RLT_TOOL_INITIALIZED) {
         if (scenarioComparisonChart) scenarioComparisonChart.destroy();
         const savingsLabel = savings.totalCost >= 0 ? 'Einsparung' : 'Mehrkosten';
         const savingsValue = Math.abs(savings.totalCost);
-        const savingsBgColor = savings.totalCost >= 0 ? '#a7f3d0' : '#fca5a5';
-        const savingsBorderColor = savings.totalCost >= 0 ? '#6ee7b7' : '#ef4444';
-        const savingsDataLabelColor = savings.totalCost >= 0 ? '#065f46' : '#991b1b';
+        const savingsBgColor = savings.totalCost >= 0 ? '#16a34a' : '#dc2626';
+        const savingsBorderColor = savings.totalCost >= 0 ? '#15803d' : '#b91c1c';
 
         scenarioComparisonChart = new Chart(document.getElementById('scenario-comparison-chart').getContext('2d'), {
             type: 'bar',
@@ -948,8 +957,8 @@ if (!window.RLT_TOOL_INITIALIZED) {
                 datasets: [{
                     label: 'Jahreskosten in €',
                     data: [basis.totalCost, optimierung.totalCost, savingsValue],
-                    backgroundColor: ['#6b7280', '#16a34a', savingsBgColor],
-                    borderColor: ['#4b5563', '#15803d', savingsBorderColor],
+                    backgroundColor: ['#6b7280', '#3b82f6', savingsBgColor],
+                    borderColor: ['#4b5563', '#2563eb', savingsBorderColor],
                     borderWidth: 1,
                     borderRadius: 4
                 }]
@@ -962,9 +971,7 @@ if (!window.RLT_TOOL_INITIALIZED) {
                     datalabels: {
                         anchor: 'center',
                         align: 'center',
-                        color: (context) => {
-                            return context.dataIndex === 2 ? savingsDataLabelColor : '#ffffff';
-                        },
+                        color: '#ffffff',
                         font: { size: 14, weight: 'bold' },
                         formatter: value => value > 0.01 ? `${formatNumber(value, 2)} €` : ''
                     }
