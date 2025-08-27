@@ -1,0 +1,938 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Experten-Tool für RLT-Analyse (Optimiert)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f0f2f5;
+        }
+        .card {
+            background-color: white;
+            border-radius: 0.75rem;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+        .input-group {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .input-field {
+            width: 100%;
+            padding: 0.5rem 0.75rem;
+            border: 1px solid #d1d5db;
+            border-radius: 0.375rem;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        .input-field:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
+        }
+        .unit-label {
+            white-space: nowrap;
+            color: #4b5563;
+        }
+        .tab {
+            padding: 0.75rem 1.5rem;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            font-weight: 500;
+            color: #4b5563;
+            transition: all 0.2s;
+        }
+        .tab.active {
+            color: #1d4ed8;
+            border-bottom-color: #1d4ed8;
+        }
+        .scheduler-cell {
+            width: 100%;
+            padding-top: 100%; /* Aspect ratio 1:1 */
+            position: relative;
+            cursor: pointer;
+            border: 1px solid #e5e7eb;
+            transition: background-color 0.1s;
+            user-select: none;
+        }
+        .scheduler-cell:hover {
+            border-color: #9ca3af;
+        }
+        .cell-content {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+        }
+        .mode-normal { background-color: #2563eb; }
+        .mode-absenk { background-color: #7dd3fc; }
+        .mode-aus { 
+            background-color: #fee2e2; /* Light red background */
+            background-image: repeating-linear-gradient(45deg, #fca5a5 25%, transparent 25%, transparent 75%, #fca5a5 75%, #fca5a5), repeating-linear-gradient(45deg, #fca5a5 25%, transparent 25%, transparent 75%, #fca5a5 75%, #fca5a5);
+            background-position: 0 0, 4px 4px;
+            background-size: 8px 8px;
+        }
+        .kpi-card {
+            background-color: white;
+            border-radius: 0.75rem;
+            padding: 1.5rem;
+            text-align: center;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+            transition: transform 0.2s;
+        }
+        .kpi-card:hover {
+            transform: translateY(-5px);
+        }
+        .kpi-value {
+            font-size: 2.25rem;
+            font-weight: 700;
+            color: #111827;
+        }
+        .kpi-label {
+            font-size: 1rem;
+            color: #4b5563;
+        }
+        .saving-positive { color: #16a34a; }
+        .saving-negative { color: #dc2626; }
+        .grid-cols-49 {
+            grid-template-columns: 2.5rem repeat(48, minmax(0, 1fr));
+        }
+        .chart-container {
+            position: relative;
+            height: 350px;
+            width: 100%;
+        }
+        .radio-group label {
+            cursor: pointer;
+            padding: 0.5rem 1rem;
+            border: 1px solid #d1d5db;
+            border-radius: 0.375rem;
+            transition: all 0.2s;
+        }
+        .radio-group input[type="radio"]:checked + label {
+            background-color: #dbeafe;
+            border-color: #3b82f6;
+            color: #1e40af;
+            font-weight: 600;
+        }
+        .form-section {
+            background-color: #f9fafb;
+            border-radius: 0.5rem;
+            padding: 1rem;
+            margin-top: 1rem;
+            border: 2px solid transparent;
+            transition: border-color 0.3s;
+        }
+        .form-section.active-scenario-basis {
+            border-color: #9ca3af; /* Gray for Basis */
+        }
+        .form-section.active-scenario-optimierung {
+            border-color: #3b82f6; /* Blue for Optimierung */
+        }
+        #report-table-body tr:nth-child(even) {
+            background-color: #f9fafb;
+        }
+        .scheduler-selection-overlay {
+            position: absolute;
+            background-color: rgba(59, 130, 246, 0.3);
+            border: 2px solid #3b82f6;
+            z-index: 10;
+            pointer-events: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 1rem;
+            text-shadow: 1px 1px 2px black;
+            border-radius: 0.25rem;
+        }
+    </style>
+</head>
+<body class="p-4 sm:p-6 md:p-8">
+    <div class="max-w-7xl mx-auto">
+        <header class="mb-8 text-center">
+            <h1 class="text-4xl font-bold text-gray-800">Experten-Tool für RLT-Analyse</h1>
+            <p class="text-lg text-gray-600 mt-2">Detaillierte Energie- und Kostenanalyse inkl. Feuchteberechnung</p>
+        </header>
+
+        <main id="app">
+            <!-- EINGABEBEREICH -->
+            <div class="card">
+                <h2 class="text-2xl font-semibold text-gray-700 border-b pb-3 mb-6">1. Eingabeparameter</h2>
+                
+                <div class="mb-2">
+                    <label class="block text-md font-medium text-gray-700 mb-2">Anlagenmodus</label>
+                    <div id="anlagenmodus" class="flex flex-wrap gap-4 radio-group">
+                        <div>
+                            <input type="radio" id="mode-temp" name="anlagenmodus" value="temp" checked>
+                            <label for="mode-temp">Nur Temperaturführung</label>
+                        </div>
+                        <div>
+                            <input type="radio" id="mode-dehumidify" name="anlagenmodus" value="dehumidify">
+                            <label for="mode-dehumidify">Kühlen & Entfeuchten</label>
+                        </div>
+                        <div>
+                            <input type="radio" id="mode-humidify" name="anlagenmodus" value="humidify">
+                            <label for="mode-humidify">Heizen & Befeuchten</label>
+                        </div>
+                    </div>
+                    <div class="mt-2 p-3 bg-gray-50 rounded-lg text-xs text-gray-600 space-y-1">
+                        <p><b>Nur Temperaturführung:</b> Anlage heizt oder kühlt sensibel, um die Zulufttemperatur zu erreichen (keine aktive Be-/Entfeuchtung).</p>
+                        <p><b>Kühlen & Entfeuchten:</b> Anlage kühlt und entfeuchtet aktiv, um den Zuluft-Sollzustand (Temperatur & Feuchte) zu erreichen.</p>
+                        <p><b>Heizen & Befeuchten:</b> Anlage heizt und befeuchtet aktiv, um den Zuluft-Sollzustand (Temperatur & Feuchte) zu erreichen.</p>
+                    </div>
+                </div>
+
+                <!-- TABS FÜR SZENARIEN -->
+                <div class="flex border-b my-6">
+                    <div id="tab-basis" class="tab active" onclick="switchTab('basis')">Basis-Szenario (Ist)</div>
+                    <div id="tab-optimierung" class="tab" onclick="switchTab('optimierung')">Optimierungs-Szenario (Soll)</div>
+                </div>
+                <div class="p-4 bg-gray-50 rounded-lg text-sm text-gray-700">
+                    <p id="scenario-explanation">
+                        <b>Basis-Szenario:</b> Geben Sie hier die Parameter der bestehenden Anlage (Ist-Zustand) ein.
+                    </p>
+                </div>
+
+                <!-- FORMULARE -->
+                <div id="form-container">
+                    <!-- Platzhalter für die beiden Formulare, die per JS eingefügt werden -->
+                </div>
+
+                <!-- WOCHENPLANER CONTAINER -->
+                <div id="schedulers-container" class="mt-8">
+                    <!-- Platzhalter für die beiden Wochenplaner -->
+                </div>
+            </div>
+
+            <!-- BERECHNUNGSBUTTON -->
+            <div class="flex justify-center items-center gap-4 my-8">
+                <button id="reset-btn" class="bg-gray-500 text-white font-bold py-3 px-12 rounded-lg hover:bg-gray-600 transition-transform transform hover:scale-105 shadow-lg">
+                    Eingaben zurücksetzen
+                </button>
+                <button id="calculate-btn" class="bg-blue-600 text-white font-bold py-3 px-12 rounded-lg hover:bg-blue-700 transition-transform transform hover:scale-105 shadow-lg">
+                    Analyse durchführen
+                </button>
+            </div>
+
+            <!-- ERGEBNISBEREICH -->
+            <div id="results-container" class="hidden">
+                <!-- ÜBERSICHT / DASHBOARD -->
+                <div class="card">
+                    <h2 class="text-2xl font-semibold text-gray-700 border-b pb-3 mb-6">2. Übersicht (Dashboard)</h2>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                        <div class="kpi-card">
+                            <h3 class="kpi-label">Gesamtkosten Basis</h3>
+                            <p id="kpi-cost-basis" class="kpi-value">0 €/a</p>
+                        </div>
+                        <div class="kpi-card">
+                            <h3 class="kpi-label">Gesamtkosten Optimierung</h3>
+                            <p id="kpi-cost-optimierung" class="kpi-value">0 €/a</p>
+                        </div>
+                        <div class="kpi-card">
+                            <h3 class="kpi-label">Einsparung</h3>
+                            <p id="kpi-saving" class="kpi-value saving-positive">0 €/a</p>
+                            <p id="kpi-saving-percent" class="text-lg font-medium saving-positive">(0 %)</p>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                        <div class="chart-container">
+                            <h3 class="text-lg font-medium text-gray-700 text-center mb-4">Kostenverteilung (Optimierung)</h3>
+                            <canvas id="cost-distribution-chart"></canvas>
+                        </div>
+                        <div class="chart-container">
+                            <h3 class="text-lg font-medium text-gray-700 text-center mb-4">Szenarienvergleich Jahreskosten</h3>
+                            <canvas id="scenario-comparison-chart"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- DETAILBERICHT -->
+                <div class="card">
+                    <h2 class="text-2xl font-semibold text-gray-700 border-b pb-3 mb-6">3. Detailbericht</h2>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Parameter</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Einheit</th>
+                                    <th colspan="2" class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-l border-r">Basis-Szenario</th>
+                                    <th colspan="2" class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-l border-r">Optimierungs-Szenario</th>
+                                    <th colspan="2" class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-l">Einsparung</th>
+                                </tr>
+                                <tr>
+                                    <th></th>
+                                    <th></th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-l">Energie [kWh/a]</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Kosten [€/a]</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-l">Energie [kWh/a]</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Kosten [€/a]</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-l">Energie [kWh/a]</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Kosten [€/a]</th>
+                                </tr>
+                            </thead>
+                            <tbody id="report-table-body" class="bg-white divide-y divide-gray-200"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Modal for notifications -->
+    <div id="alert-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full flex items-center justify-center hidden z-50">
+        <div class="relative mx-auto p-5 border w-full max-w-md shadow-lg rounded-md bg-white">
+            <div class="mt-3 text-center">
+                <h3 class="text-lg leading-6 font-medium text-gray-900">Hinweis</h3>
+                <div class="mt-2 px-7 py-3">
+                    <p id="modal-message" class="text-sm text-gray-600"></p>
+                </div>
+                <div class="items-center px-4 py-3">
+                    <button id="modal-close-btn" class="px-4 py-2 bg-blue-600 text-white text-base font-medium rounded-md w-full shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-400">
+                        Schließen
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+<script>
+if (!window.RLT_TOOL_INITIALIZED) {
+    // --- KONSTANTEN UND GLOBALE VARIABLEN ---
+    const R_d = 287.058; // Gaskonstante für trockene Luft [J/(kg*K)]
+    const R_w = 461.52; // Gaskonstante für Wasserdampf [J/(kg*K)]
+    const cp_d = 1.006; // Spezifische Wärmekapazität trockener Luft [kJ/(kg*K)]
+    const cp_w = 1.86; // Spezifische Wärmekapazität Wasserdampf [kJ/(kg*K)]
+    const h_v0 = 2501; // Verdampfungsenthalpie von Wasser bei 0°C [kJ/kg]
+    let costDistributionChart, scenarioComparisonChart;
+    let activeTab = 'basis';
+    Chart.register(ChartDataLabels);
+
+    // --- PSYCHROMETRIE-BIBLIOTHEK ---
+    const psychroLib = {
+        getSaturationVaporPressure: tempC => 611.2 * Math.exp((17.62 * tempC) / (243.12 + tempC)),
+        getAbsoluteHumidity(tempC, relHum, pressurePa = 101325) {
+            if (relHum < 0) relHum = 0;
+            const p_sat = this.getSaturationVaporPressure(tempC);
+            const p_w = (relHum / 100) * p_sat;
+            return (0.622 * (p_w / (pressurePa - p_w))) * 1000;
+        },
+        getRelativeHumidity(tempC, absHum_g_kg, pressurePa = 101325) {
+            const absHum = absHum_g_kg / 1000;
+            const p_sat = this.getSaturationVaporPressure(tempC);
+            const p_w = (absHum * pressurePa) / (0.622 + absHum);
+            return (p_w / p_sat) * 100;
+        },
+        getEnthalpyFromAbsHum(tempC, absHum_g_kg) {
+            const absHum = absHum_g_kg / 1000;
+            return cp_d * tempC + absHum * (h_v0 + cp_w * tempC);
+        },
+        getEnthalpyFromRelHum(tempC, relHum) {
+            const absHum_g_kg = this.getAbsoluteHumidity(tempC, relHum);
+            return this.getEnthalpyFromAbsHum(tempC, absHum_g_kg);
+        },
+        getDensity(tempC, absHum_g_kg, pressurePa = 101325) {
+            const tempK = tempC + 273.15;
+            const absHum = absHum_g_kg / 1000;
+            const p_w = (absHum * pressurePa) / (0.622 + absHum);
+            const p_d = pressurePa - p_w;
+            return (p_d / (R_d * tempK)) + (p_w / (R_w * tempK));
+        }
+    };
+
+    // --- UI-LOGIK ---
+    document.addEventListener('DOMContentLoaded', () => {
+        const formContainer = document.getElementById('form-container');
+        const schedulersContainer = document.getElementById('schedulers-container');
+
+        formContainer.innerHTML = createFormHTML('basis') + createFormHTML('optimierung');
+        schedulersContainer.innerHTML = createScheduler('basis') + createScheduler('optimierung');
+        
+        document.getElementById('form-optimierung').style.display = 'none';
+        document.getElementById('form-basis').querySelectorAll('.form-section').forEach(el => el.classList.add('active-scenario-basis'));
+        
+        addInputValidation();
+        setupSchedulerInteraction('basis');
+        setupSchedulerInteraction('optimierung');
+        document.getElementById('calculate-btn').addEventListener('click', runAnalysis);
+        document.getElementById('reset-btn').addEventListener('click', resetAll);
+        document.getElementById('modal-close-btn').addEventListener('click', () => {
+            document.getElementById('alert-modal').classList.add('hidden');
+        });
+        document.getElementById('copy-profile-btn').addEventListener('click', copyProfile);
+    });
+
+    function showModal(message) {
+        document.getElementById('modal-message').textContent = message;
+        document.getElementById('alert-modal').classList.remove('hidden');
+    }
+
+    function switchTab(tabName) {
+        activeTab = tabName;
+        document.getElementById('tab-basis').classList.toggle('active', tabName === 'basis');
+        document.getElementById('tab-optimierung').classList.toggle('active', tabName === 'optimierung');
+        
+        const formBasis = document.getElementById('form-basis');
+        const formOptimierung = document.getElementById('form-optimierung');
+        
+        formBasis.style.display = tabName === 'basis' ? 'block' : 'none';
+        formOptimierung.style.display = tabName === 'optimierung' ? 'block' : 'none';
+        
+        formBasis.querySelectorAll('.form-section').forEach(el => el.classList.toggle('active-scenario-basis', tabName === 'basis'));
+        formOptimierung.querySelectorAll('.form-section').forEach(el => el.classList.toggle('active-scenario-optimierung', tabName === 'optimierung'));
+
+        const explanation = document.getElementById('scenario-explanation');
+        if (tabName === 'basis') {
+            explanation.innerHTML = '<b>Basis-Szenario:</b> Geben Sie hier die Parameter der bestehenden Anlage (Ist-Zustand) ein.';
+        } else {
+            explanation.innerHTML = '<b>Optimierungs-Szenario:</b> Geben Sie hier die Parameter nach einer geplanten Modernisierung (Soll-Zustand) ein.';
+        }
+    }
+
+    // --- HTML-GENERIERUNG ---
+    function createFormHTML(prefix) {
+        return `
+            <div id="form-${prefix}" data-prefix="${prefix}">
+                <div class="form-section">
+                    <h3 class="text-lg font-semibold text-gray-600 mb-4">Allgemeine Anlagenparameter</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-6">
+                        ${createInputField(prefix, 'volumenstromNormal', 'Zuluftvolumenstrom Normal', 20000, 'm³/h', {max: 500000})}
+                        ${createInputField(prefix, 'volumenstromAbsenk', 'Zuluftvolumenstrom Absenk', 10000, 'm³/h', {max: 500000})}
+                        ${createInputField(prefix, 'druckverlust', 'Gesamtdruckverlust Anlage', 1500, 'Pa')}
+                        ${createInputField(prefix, 'wirkungsgradVentilator', 'Wirkungsgrad Ventilator', 70, '%', {min: 0, max: 100})}
+                        ${createInputField(prefix, 'wirkungsgradMotor', 'Wirkungsgrad Motor', 90, '%', {min: 0, max: 100})}
+                        ${createInputField(prefix, 'wirkungsgradWRG', 'Wirkungsgrad WRG', 75, '%', {min: 0, max: 100})}
+                    </div>
+                </div>
+                <div class="form-section">
+                    <h3 class="text-lg font-semibold text-gray-600 mb-4">Betriebs- und Klimazustände</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-6">
+                        ${createStatePointField(prefix, 'aussenluftHeiz', 'Außenluft (Heizperiode)', -5, 80)}
+                        ${createStatePointField(prefix, 'aussenluftKuehl', 'Außenluft (Kühlperiode)', 32, 50)}
+                        ${createStatePointField(prefix, 'abluft', 'Raumluft/Abluft', 21, 50, 'Der Zustand der Raum-/Abluft wird für die Berechnung der Wärmerückgewinnung (WRG) benötigt.')}
+                        ${createStatePointField(prefix, 'zuluftNormal', 'Zuluft (Normal)', 21, 50)}
+                        ${createStatePointField(prefix, 'zuluftAbsenk', 'Zuluft (Absenk)', 18, 50)}
+                        ${createInputField(prefix, 'heizstunden', 'Heizstunden pro Jahr', 3000, 'h/a')}
+                        ${createInputField(prefix, 'kuehlstunden', 'Kühlstunden pro Jahr', 1000, 'h/a')}
+                    </div>
+                </div>
+                <div class="form-section">
+                    <h3 class="text-lg font-semibold text-gray-600 mb-4">Energiekosten</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-6">
+                        ${createInputField(prefix, 'kostenWaerme', 'Kosten Wärmeenergie', 0.12, '€/kWh', {step: 0.001})}
+                        ${createInputField(prefix, 'kostenKaelte', 'Kosten Kälteenergie', 0.08, '€/kWh', {step: 0.001})}
+                        ${createInputField(prefix, 'kostenStrom', 'Kosten elektrische Energie', 0.30, '€/kWh', {step: 0.001})}
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    function createInputField(prefix, id, label, value, unit, options = {}) {
+        const { min, max, step } = { min: 0, max: 100000, step: 1, ...options };
+        return `
+            <div>
+                <label for="${prefix}-${id}" class="block text-sm font-medium text-gray-700">${label}</label>
+                <div class="input-group mt-1">
+                    <input type="number" id="${prefix}-${id}" value="${value}" min="${min}" max="${max}" step="${step}" class="input-field">
+                    <span class="unit-label">${unit}</span>
+                </div>
+            </div>
+        `;
+    }
+
+    function createStatePointField(prefix, id, label, temp, hum, title = '') {
+        return `
+            <div class="lg:col-span-1">
+                <label class="block text-sm font-medium text-gray-700" title="${title}">${label}</label>
+                <div class="grid grid-cols-3 gap-2 mt-1">
+                    <div class="col-span-1">
+                        <div class="input-group">
+                            <input type="number" id="${prefix}-${id}-temp" value="${temp}" step="0.5" min="-40" max="60" class="input-field" title="Temperatur">
+                            <span class="unit-label">°C</span>
+                        </div>
+                    </div>
+                    <div class="col-span-2 flex items-center gap-2">
+                        <div class="input-group">
+                            <input type="number" id="${prefix}-${id}-hum" value="${hum}" step="1" min="0" max="100" class="input-field" title="Feuchte">
+                        </div>
+                        <select id="${prefix}-${id}-hum-type" class="input-field !w-auto" title="Feuchte-Einheit" onchange="handleHumidityTypeChange(this)">
+                            <option value="rh" selected>% r.F.</option><option value="ah">g/kg</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    function createScheduler(prefix) {
+        const days = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
+        let headerHtml = '<div></div>';
+        for (let i = 0; i < 24; i++) {
+            headerHtml += `<div class="col-span-2 text-center text-gray-500 font-semibold text-xs">${i}</div>`;
+        }
+
+        let rowsHtml = '';
+        days.forEach((day, dayIndex) => {
+            rowsHtml += `<div class="font-semibold text-gray-500 flex items-center justify-center text-sm">${day}</div>`;
+            for (let halfHour = 0; halfHour < 48; halfHour++) {
+                let defaultMode = 'aus';
+                if (dayIndex < 5 && halfHour >= 14 && halfHour < 36) { // 7:00 - 18:00
+                    defaultMode = 'normal';
+                }
+                rowsHtml += `<div class="scheduler-cell mode-${defaultMode}" data-day="${dayIndex}" data-time="${halfHour}"><div class="cell-content"></div></div>`;
+            }
+        });
+        
+        const title = prefix === 'basis' ? 'Basis-Szenario' : 'Optimierungs-Szenario';
+
+        return `
+            <div class="mt-8">
+                <div class="flex justify-between items-center">
+                     <h3 class="text-lg font-semibold text-gray-600">${title} (Wochenplaner)</h3>
+                     ${prefix === 'optimierung' ? `<button type="button" id="copy-profile-btn" class="items-center px-3 py-1.5 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700">Profil von Basis kopieren</button>` : ''}
+                </div>
+                <div class="flex flex-wrap items-center gap-x-6 gap-y-2 my-4">
+                    <div class="flex items-center gap-4">
+                        <span class="font-medium">Zeichenmodus:</span>
+                        <div class="radio-group flex gap-2">
+                            <div><input type="radio" id="${prefix}-draw-normal" name="${prefix}-draw-mode" value="normal" checked><label for="${prefix}-draw-normal">Normal</label></div>
+                            <div><input type="radio" id="${prefix}-draw-absenk" name="${prefix}-draw-mode" value="absenk"><label for="${prefix}-draw-absenk">Absenk</label></div>
+                            <div><input type="radio" id="${prefix}-draw-aus" name="${prefix}-draw-mode" value="aus"><label for="${prefix}-draw-aus">AUS</label></div>
+                        </div>
+                    </div>
+                </div>
+                <div id="scheduler-container-${prefix}" class="relative">
+                    <div id="scheduler-${prefix}" class="grid grid-cols-49 gap-px text-xs text-center select-none">
+                        ${headerHtml}
+                        ${rowsHtml}
+                    </div>
+                    <div id="scheduler-selection-overlay-${prefix}" class="scheduler-selection-overlay hidden"></div>
+                </div>
+            </div>
+        `;
+    }
+
+    // --- INTERAKTIVITÄT ---
+    function addInputValidation() {
+        document.querySelectorAll('input[type="number"]').forEach(input => {
+            input.addEventListener('input', () => {
+                const min = parseFloat(input.min);
+                const max = parseFloat(input.max);
+                let value = parseFloat(input.value);
+                if (!isNaN(value)) {
+                    if (value < min) input.value = min;
+                    if (value > max) input.value = max;
+                }
+            });
+        });
+    }
+
+    function handleHumidityTypeChange(selectElement) {
+        const id = selectElement.id.replace('-hum-type', '');
+        const tempInput = document.getElementById(`${id}-temp`);
+        const humInput = document.getElementById(`${id}-hum`);
+        
+        if (!tempInput || !humInput) return;
+
+        const tempC = parseFloat(tempInput.value);
+        const humValue = parseFloat(humInput.value);
+
+        if (isNaN(tempC) || isNaN(humValue)) return;
+
+        if (selectElement.value === 'ah') { // Switched TO g/kg
+            const newAbsHum = psychroLib.getAbsoluteHumidity(tempC, humValue);
+            humInput.value = newAbsHum.toFixed(2);
+            humInput.min = 0;
+            humInput.max = 30;
+            humInput.step = 0.1;
+        } else { // Switched TO % r.F.
+            const newRelHum = psychroLib.getRelativeHumidity(tempC, humValue);
+            humInput.value = newRelHum.toFixed(1);
+            humInput.min = 0;
+            humInput.max = 100;
+            humInput.step = 1;
+        }
+    }
+
+    function setupSchedulerInteraction(prefix) {
+        const scheduler = document.getElementById(`scheduler-${prefix}`);
+        const overlay = document.getElementById(`scheduler-selection-overlay-${prefix}`);
+        let isDragging = false;
+        let startCell = null;
+
+        scheduler.addEventListener('mousedown', (e) => {
+            const cell = e.target.closest('.scheduler-cell');
+            if (cell) {
+                isDragging = true;
+                startCell = cell;
+                e.preventDefault();
+            }
+        });
+
+        scheduler.addEventListener('mousemove', (e) => {
+            const cell = e.target.closest('.scheduler-cell');
+            if (isDragging && cell) {
+                updateSelectionOverlay(startCell, cell, overlay, scheduler);
+            } else if (cell) {
+                updateCellTooltip(cell);
+            }
+        });
+
+        document.addEventListener('mouseup', (e) => {
+            if (!isDragging) return;
+            isDragging = false;
+            const endCell = e.target.closest('.scheduler-cell') || startCell;
+            applySelection(startCell, endCell, prefix);
+            overlay.classList.add('hidden');
+        });
+    }
+
+    function updateSelectionOverlay(start, end, overlay, scheduler) {
+        if (!start || !end || start.dataset.day !== end.dataset.day) {
+            overlay.classList.add('hidden');
+            return;
+        }
+
+        const day = parseInt(start.dataset.day);
+        const startTime = parseInt(start.dataset.time);
+        const endTime = parseInt(end.dataset.time);
+
+        const minTime = Math.min(startTime, endTime);
+        const maxTime = Math.max(startTime, endTime);
+
+        const startRect = scheduler.querySelector(`[data-day='${day}'][data-time='${minTime}']`).getBoundingClientRect();
+        const endRect = scheduler.querySelector(`[data-day='${day}'][data-time='${maxTime}']`).getBoundingClientRect();
+        const containerRect = scheduler.parentElement.getBoundingClientRect();
+
+        overlay.style.top = `${startRect.top - containerRect.top}px`;
+        overlay.style.left = `${startRect.left - containerRect.left}px`;
+        overlay.style.width = `${endRect.right - startRect.left}px`;
+        overlay.style.height = `${startRect.height}px`;
+        overlay.textContent = `${formatTime(minTime)} - ${formatTime(maxTime + 1)}`;
+        overlay.classList.remove('hidden');
+    }
+
+    function applySelection(start, end, prefix) {
+        if (!start || !end || start.dataset.day !== end.dataset.day) return;
+
+        const day = parseInt(start.dataset.day);
+        const startTime = parseInt(start.dataset.time);
+        const endTime = parseInt(end.dataset.time);
+        const drawMode = document.querySelector(`input[name="${prefix}-draw-mode"]:checked`).value;
+
+        const minTime = Math.min(startTime, endTime);
+        const maxTime = Math.max(startTime, endTime);
+
+        for (let i = minTime; i <= maxTime; i++) {
+            const cell = document.querySelector(`#scheduler-${prefix} [data-day='${day}'][data-time='${i}']`);
+            if (cell) {
+                cell.className = `scheduler-cell mode-${drawMode}`;
+            }
+        }
+    }
+
+    function updateCellTooltip(cell) {
+        const day = parseInt(cell.dataset.day);
+        const time = parseInt(cell.dataset.time);
+        const currentMode = cell.classList.contains('mode-normal') ? 'mode-normal' : (cell.classList.contains('mode-absenk') ? 'mode-absenk' : 'mode-aus');
+        const modeText = currentMode === 'mode-normal' ? 'Normal' : (currentMode === 'mode-absenk' ? 'Absenk' : 'AUS');
+
+        let first = time, last = time;
+        // Look left
+        for (let i = time - 1; i >= 0; i--) {
+            const prevCell = cell.parentElement.querySelector(`[data-day='${day}'][data-time='${i}']`);
+            if (prevCell && prevCell.classList.contains(currentMode)) {
+                first = i;
+            } else {
+                break;
+            }
+        }
+        // Look right
+        for (let i = time + 1; i < 48; i++) {
+            const nextCell = cell.parentElement.querySelector(`[data-day='${day}'][data-time='${i}']`);
+            if (nextCell && nextCell.classList.contains(currentMode)) {
+                last = i;
+            } else {
+                break;
+            }
+        }
+        cell.title = `${modeText}: ${formatTime(first)} - ${formatTime(last + 1)}`;
+    }
+
+    function formatTime(halfHour) {
+        const hour = Math.floor(halfHour / 2);
+        const minute = (halfHour % 2) * 30;
+        return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+    }
+
+    function copyProfile() {
+        const basisCells = document.querySelectorAll('#scheduler-basis .scheduler-cell');
+        const optimierungCells = document.querySelectorAll('#scheduler-optimierung .scheduler-cell');
+        basisCells.forEach((cell, index) => {
+            optimierungCells[index].className = cell.className;
+        });
+        showModal("Betriebsprofil wurde vom Basis- zum Optimierungs-Szenario kopiert.");
+    }
+
+    function resetAll() {
+        document.getElementById('form-basis').reset();
+        document.getElementById('form-optimierung').reset();
+        resetScheduler('basis');
+        resetScheduler('optimierung');
+        showModal("Alle Eingaben wurden auf die Standardwerte zurückgesetzt.");
+    }
+
+    function resetScheduler(prefix) {
+         document.querySelectorAll(`#scheduler-${prefix} .scheduler-cell`).forEach(cell => {
+            const dayIndex = parseInt(cell.dataset.day);
+            const halfHour = parseInt(cell.dataset.time);
+            let defaultMode = 'aus';
+            if (dayIndex < 5 && halfHour >= 14 && halfHour < 36) { // 7:00 - 18:00
+                defaultMode = 'normal';
+            }
+            cell.className = `scheduler-cell mode-${defaultMode}`;
+         });
+    }
+
+
+    // --- HAUPTBERECHNUNGSLOGIK ---
+    function runAnalysis() {
+        const basisData = calculateScenario('basis');
+        const optimierungData = calculateScenario('optimierung');
+        if (!basisData || !optimierungData) {
+            showModal("Bitte überprüfen Sie Ihre Eingaben. Eine Berechnung war nicht möglich.");
+            return;
+        }
+        const savings = calculateSavings(basisData, optimierungData);
+        displayResults(basisData, optimierungData, savings);
+        document.getElementById('results-container').classList.remove('hidden');
+        document.getElementById('results-container').scrollIntoView({ behavior: 'smooth' });
+    }
+
+    function getInputs(prefix) {
+        const data = {};
+        const form = document.getElementById(`form-${prefix}`);
+        form.querySelectorAll('input[type="number"], select').forEach(el => {
+            const id = el.id.replace(`${prefix}-`, '');
+            data[id] = el.type === 'number' ? parseFloat(el.value) : el.value;
+        });
+        data.anlagenmodus = document.querySelector('input[name="anlagenmodus"]:checked').value;
+        return data;
+    }
+
+    function getStatePoint(prefix, id) {
+        const temp = parseFloat(document.getElementById(`${prefix}-${id}-temp`).value);
+        const hum = parseFloat(document.getElementById(`${prefix}-${id}-hum`).value);
+        const humType = document.getElementById(`${prefix}-${id}-hum-type`).value;
+        if (humType === 'rh') {
+            const absHum_g_kg = psychroLib.getAbsoluteHumidity(temp, hum);
+            return { temp, relHum: hum, absHum_g_kg, enthalpy: psychroLib.getEnthalpyFromRelHum(temp, hum) };
+        } else {
+            return { temp, relHum: psychroLib.getRelativeHumidity(temp, hum), absHum_g_kg: hum, enthalpy: psychroLib.getEnthalpyFromAbsHum(temp, hum) };
+        }
+    }
+
+    function getSchedulerHours(prefix) {
+        const hours = { normal: 0, absenk: 0, aus: 0 };
+        document.querySelectorAll(`#scheduler-${prefix} .scheduler-cell`).forEach(cell => {
+            if (cell.classList.contains('mode-normal')) hours.normal += 0.5;
+            else if (cell.classList.contains('mode-absenk')) hours.absenk += 0.5;
+            else hours.aus += 0.5;
+        });
+        return hours;
+    }
+
+    function calculateScenario(prefix) {
+        const i = getInputs(prefix);
+        const aussenluftHeiz = getStatePoint(prefix, 'aussenluftHeiz');
+        const aussenluftKuehl = getStatePoint(prefix, 'aussenluftKuehl');
+        const abluft = getStatePoint(prefix, 'abluft');
+        const zuluftNormal = getStatePoint(prefix, 'zuluftNormal');
+        const zuluftAbsenk = getStatePoint(prefix, 'zuluftAbsenk');
+
+        const weeklyHours = getSchedulerHours(prefix);
+        const totalWeeklyOpHours = weeklyHours.normal + weeklyHours.absenk;
+        if (totalWeeklyOpHours === 0) return createEmptyResult();
+
+        const totalHoursInYear = 8760;
+        const heatingSeasonFraction = i.heizstunden / totalHoursInYear;
+        const coolingSeasonFraction = i.kuehlstunden / totalHoursInYear;
+
+        const annualNormalHours = weeklyHours.normal * 52.14; // Approx weeks in a year
+        const annualAbsenkHours = weeklyHours.absenk * 52.14;
+
+        const h_normal_heiz = annualNormalHours * heatingSeasonFraction;
+        const h_absenk_heiz = annualAbsenkHours * heatingSeasonFraction;
+        const h_normal_kuehl = annualNormalHours * coolingSeasonFraction;
+        const h_absenk_kuehl = annualAbsenkHours * coolingSeasonFraction;
+        
+        const resNormal = calculateMode(i.volumenstromNormal, i, aussenluftHeiz, aussenluftKuehl, abluft, zuluftNormal, h_normal_heiz, h_normal_kuehl);
+        const resAbsenk = calculateMode(i.volumenstromAbsenk, i, aussenluftHeiz, aussenluftKuehl, abluft, zuluftAbsenk, h_absenk_heiz, h_absenk_kuehl);
+        
+        return {
+            energyFan: resNormal.energyFan + resAbsenk.energyFan, costFan: resNormal.costFan + resAbsenk.costFan,
+            energyHeat: resNormal.energyHeat + resAbsenk.energyHeat, costHeat: resNormal.costHeat + resAbsenk.costHeat,
+            energyCool: resNormal.energyCool + resAbsenk.energyCool, costCool: resNormal.costCool + resAbsenk.costCool,
+            totalCost: (resNormal.costFan + resAbsenk.costFan) + (resNormal.costHeat + resAbsenk.costHeat) + (resNormal.costCool + resAbsenk.costCool)
+        };
+    }
+
+    function calculateMode(volumenstrom, i, aussenHeiz, aussenKuehl, abluft, zuluft, h_heiz, h_kuehl) {
+        if (volumenstrom === 0) return createEmptyResult();
+
+        const powerFan = (volumenstrom * i.druckverlust) / (3600 * 1000 * (i.wirkungsgradVentilator / 100) * (i.wirkungsgradMotor / 100));
+        const energyFan = powerFan * (h_heiz + h_kuehl);
+        const costFan = energyFan * i.kostenStrom;
+
+        const tempNachWRG_Heiz = aussenHeiz.temp + (i.wirkungsgradWRG / 100) * (abluft.temp - aussenHeiz.temp);
+        const hNachWRG_Heiz = psychroLib.getEnthalpyFromAbsHum(tempNachWRG_Heiz, aussenHeiz.absHum_g_kg);
+        const massenstromHeiz = (volumenstrom * psychroLib.getDensity(aussenHeiz.temp, aussenHeiz.absHum_g_kg)) / 3600;
+        const powerHeat = zuluft.enthalpy > hNachWRG_Heiz ? massenstromHeiz * (zuluft.enthalpy - hNachWRG_Heiz) : 0;
+        
+        const tempNachWRG_Kuehl = aussenKuehl.temp - (i.wirkungsgradWRG / 100) * (aussenKuehl.temp - abluft.temp);
+        const hNachWRG_Kuehl = psychroLib.getEnthalpyFromAbsHum(tempNachWRG_Kuehl, aussenKuehl.absHum_g_kg);
+        const massenstromKuehl = (volumenstrom * psychroLib.getDensity(aussenKuehl.temp, aussenKuehl.absHum_g_kg)) / 3600;
+        const powerCool = zuluft.enthalpy < hNachWRG_Kuehl ? massenstromKuehl * (hNachWRG_Kuehl - zuluft.enthalpy) : 0;
+
+        return {
+            energyFan, costFan,
+            energyHeat: powerHeat * h_heiz, costHeat: powerHeat * h_heiz * i.kostenWaerme,
+            energyCool: powerCool * h_kuehl, costCool: powerCool * h_kuehl * i.kostenKaelte
+        };
+    }
+
+    function calculateSavings(basis, optimierung) {
+        const savings = {};
+        for (const key in basis) savings[key] = basis[key] - optimierung[key];
+        return savings;
+    }
+
+    function createEmptyResult() {
+        return { energyFan: 0, costFan: 0, energyHeat: 0, costHeat: 0, energyCool: 0, costCool: 0, totalCost: 0 };
+    }
+
+    // --- ERGEBNISDARSTELLUNG ---
+    function displayResults(basis, optimierung, savings) {
+        document.getElementById('kpi-cost-basis').textContent = `${formatNumber(basis.totalCost)} €/a`;
+        document.getElementById('kpi-cost-optimierung').textContent = `${formatNumber(optimierung.totalCost)} €/a`;
+        document.getElementById('kpi-saving').textContent = `${formatNumber(savings.totalCost)} €/a`;
+        const savingPercent = basis.totalCost > 0 ? (savings.totalCost / basis.totalCost) * 100 : 0;
+        document.getElementById('kpi-saving-percent').textContent = `(${formatNumber(savingPercent, 1)} %)`;
+        
+        [document.getElementById('kpi-saving'), document.getElementById('kpi-saving-percent')].forEach(el => {
+            el.classList.toggle('saving-positive', savings.totalCost >= 0);
+            el.classList.toggle('saving-negative', savings.totalCost < 0);
+        });
+
+        updateCharts(basis, optimierung);
+
+        const tableBody = document.getElementById('report-table-body');
+        tableBody.innerHTML = '';
+        const totalEnergyBasis = basis.energyFan + basis.energyHeat + basis.energyCool;
+        const totalEnergyOpt = optimierung.energyFan + optimierung.energyHeat + optimierung.energyCool;
+        
+        tableBody.innerHTML += createReportRow('Ventilator-Energie', 'kWh/a', basis.energyFan, basis.costFan, optimierung.energyFan, optimierung.costFan, savings.energyFan, savings.costFan);
+        tableBody.innerHTML += createReportRow('Therm. Energie (Heizen)', 'kWh/a', basis.energyHeat, basis.costHeat, optimierung.energyHeat, optimierung.costHeat, savings.energyHeat, savings.costHeat);
+        tableBody.innerHTML += createReportRow('Therm. Energie (Kühlen)', 'kWh/a', basis.energyCool, basis.costCool, optimierung.energyCool, optimierung.costCool, savings.energyCool, savings.costCool);
+        tableBody.innerHTML += createReportRow('Gesamt', 'kWh/a', totalEnergyBasis, basis.totalCost, totalEnergyOpt, optimierung.totalCost, savings.totalCost, savings.totalCost, true);
+    }
+
+    function createReportRow(label, unit, energyB, costB, energyO, costO, energyS, costS, isTotal = false) {
+        const fw = isTotal ? 'font-bold bg-gray-100' : '';
+        return `
+            <tr class="${fw}">
+                <td class="px-6 py-4 whitespace-nowrap">${label}</td>
+                <td class="px-6 py-4 whitespace-nowrap">${unit}</td>
+                <td class="px-6 py-4 whitespace-nowrap border-l">${formatNumber(energyB)}</td>
+                <td class="px-6 py-4 whitespace-nowrap">${formatNumber(costB)}</td>
+                <td class="px-6 py-4 whitespace-nowrap border-l">${formatNumber(energyO)}</td>
+                <td class="px-6 py-4 whitespace-nowrap">${formatNumber(costO)}</td>
+                <td class="px-6 py-4 whitespace-nowrap border-l">${formatNumber(energyS)}</td>
+                <td class="px-6 py-4 whitespace-nowrap">${formatNumber(costS)}</td>
+            </tr>
+        `;
+    }
+
+    function updateCharts(basis, optimierung) {
+        if (costDistributionChart) costDistributionChart.destroy();
+        costDistributionChart = new Chart(document.getElementById('cost-distribution-chart').getContext('2d'), {
+            type: 'doughnut',
+            data: {
+                labels: ['Ventilator', 'Heizen', 'Kühlen'],
+                datasets: [{
+                    data: [optimierung.costFan, optimierung.costHeat, optimierung.costCool],
+                    backgroundColor: ['#6b7280', '#ef4444', '#2563eb'],
+                    borderColor: '#ffffff', borderWidth: 4
+                }]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                plugins: {
+                    legend: { position: 'bottom', labels: { font: { size: 14 } } },
+                    datalabels: {
+                        formatter: (value, ctx) => {
+                            const sum = ctx.chart.data.datasets[0].data.reduce((a, b) => a + b, 0);
+                            const percentage = (value * 100 / sum);
+                            return percentage > 1 ? percentage.toFixed(1) + '%' : '';
+                        },
+                        color: '#fff',
+                        font: { weight: 'bold', size: 14 }
+                    }
+                }
+            }
+        });
+
+        if (scenarioComparisonChart) scenarioComparisonChart.destroy();
+        scenarioComparisonChart = new Chart(document.getElementById('scenario-comparison-chart').getContext('2d'), {
+            type: 'bar',
+            data: {
+                labels: ['Basis-Szenario', 'Optimierungs-Szenario'],
+                datasets: [{
+                    label: 'Jahreskosten in €',
+                    data: [basis.totalCost, optimierung.totalCost],
+                    backgroundColor: ['#6b7280', '#16a34a'], 
+                    borderColor: ['#4b5563', '#15803d'],
+                    borderWidth: 1,
+                    borderRadius: 4
+                }]
+            },
+            options: {
+                indexAxis: 'y',
+                responsive: true, maintainAspectRatio: false,
+                plugins: { 
+                    legend: { display: false },
+                    datalabels: {
+                        anchor: 'center',
+                        align: 'center',
+                        color: '#ffffff',
+                        font: { size: 14, weight: 'bold' },
+                        formatter: value => `${formatNumber(value, 2)} €`
+                    }
+                },
+                scales: { x: { beginAtZero: true, ticks: { callback: value => `${formatNumber(value)} €` } } }
+            }
+        });
+    }
+
+    function formatNumber(num, decimals = 0) {
+        return (num || 0).toLocaleString('de-DE', {
+            minimumFractionDigits: decimals,
+            maximumFractionDigits: decimals
+        });
+    }
+
+    window.RLT_TOOL_INITIALIZED = true;
+}
+</script>
+</body>
+</html>
